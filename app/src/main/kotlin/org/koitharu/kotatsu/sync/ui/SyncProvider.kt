@@ -7,6 +7,7 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
+import android.util.Log
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteQueryBuilder
 import dagger.hilt.EntryPoint
@@ -61,8 +62,9 @@ abstract class SyncProvider : ContentProvider() {
 		if (values == null || table == null) {
 			return null
 		}
+        Log.d("AMOGUS", "INSERT")
 		val db = database.openHelper.writableDatabase
-		if (db.insert(table, SQLiteDatabase.CONFLICT_IGNORE, values) < 0) {
+		if (db.insert(table, if(table.equals("favourite_categories") || table.equals("tags") || table.equals("manga") || table.equals("manga_tags") || table.equals("favourites")) SQLiteDatabase.CONFLICT_IGNORE else SQLiteDatabase.CONFLICT_FAIL, values) < 0) {
 			db.update(table, values)
 		}
 		return uri
@@ -82,9 +84,9 @@ abstract class SyncProvider : ContentProvider() {
 			.update(table, SQLiteDatabase.CONFLICT_IGNORE, values, selection, selectionArgs)
 	}
 
-	override fun applyBatch(operations: ArrayList<ContentProviderOperation>): Array<ContentProviderResult> {
+	/*override fun applyBatch(operations: ArrayList<ContentProviderOperation>): Array<ContentProviderResult> {
 		return runAtomicTransaction { super.applyBatch(operations) }
-	}
+	}*/
 
 	override fun bulkInsert(uri: Uri, values: Array<out ContentValues>): Int {
 		return runAtomicTransaction { super.bulkInsert(uri, values) }
@@ -96,7 +98,13 @@ abstract class SyncProvider : ContentProvider() {
 
 	private fun <R> runAtomicTransaction(callable: Callable<R>): R {
 		return synchronized(database) {
-			database.runInTransaction(callable)
+            //database.query("PRAGMA foreign_keys = OFF;", emptyArray())
+            //database.query("PRAGMA defer_foreign_keys = ON;", emptyArray())
+			val v = database.runInTransaction(callable)
+            //database.query("PRAGMA defer_foreign_keys = OFF;", emptyArray())
+            //database.query("PRAGMA foreign_keys = ON;", emptyArray())
+            //database.query("PRAGMA foreign_key_check;", emptyArray())
+            return v
 		}
 	}
 

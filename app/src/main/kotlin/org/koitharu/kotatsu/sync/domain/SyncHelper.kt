@@ -9,7 +9,9 @@ import android.content.OperationApplicationException
 import android.content.SyncResult
 import android.content.SyncStats
 import android.database.Cursor
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.annotation.WorkerThread
 import androidx.core.net.toUri
 import dagger.assisted.Assisted
@@ -32,6 +34,7 @@ import org.koitharu.kotatsu.core.db.TABLE_HISTORY
 import org.koitharu.kotatsu.core.db.TABLE_MANGA
 import org.koitharu.kotatsu.core.db.TABLE_MANGA_TAGS
 import org.koitharu.kotatsu.core.db.TABLE_TAGS
+import org.koitharu.kotatsu.core.db.entity.SortOrder
 import org.koitharu.kotatsu.core.network.BaseHttpClient
 import org.koitharu.kotatsu.core.util.ext.buildContentValues
 import org.koitharu.kotatsu.core.util.ext.map
@@ -144,6 +147,7 @@ class SyncHelper @AssistedInject constructor(
 				.withValues(it.toContentValues())
 				.build()
 		}
+        Log.d("AMOGUS", "Upsert history");
 		return provider.applyBatch(operations)
 	}
 
@@ -155,29 +159,57 @@ class SyncHelper @AssistedInject constructor(
 				.withValues(it.toContentValues())
 				.build()
 		}
+        Log.d("AMOGUS", categories.toString());
+        Log.d("AMOGUS", "Upsert favcats");
+
+        /*val aa = provider.query(uri, arrayOf("category_id", "title"), null, null, "category_id ASC")!!;
+        aa.moveToFirst();
+        while(!aa.isAfterLast()) {
+            Log.d("AMOGUS", aa.getInt(0).toString() + " - " + aa.getString(1))
+            aa.moveToNext();
+        }
+        aa.close();*/
 		return provider.applyBatch(operations)
 	}
 
-	private fun upsertFavourites(favourites: List<FavouriteSyncDto>): Array<ContentProviderResult> {
+	@RequiresApi(Build.VERSION_CODES.R)
+    private fun upsertFavourites(favourites: List<FavouriteSyncDto>): Array<ContentProviderResult> {
 		val uri = uri(authorityFavourites, TABLE_FAVOURITES)
 		val operations = ArrayList<ContentProviderOperation>()
-		favourites.mapTo(operations) {
+        //val someFavourites = ArrayList(favourites.subList(0,1))
+        Log.d("AMOGUS", favourites.toString())
+        favourites.mapTo(operations) {
 			operations.addAll(upsertManga(it.manga, authorityFavourites))
 			ContentProviderOperation.newInsert(uri)
 				.withValues(it.toContentValues())
 				.build()
 		}
+        var theOp: ContentProviderOperation? = null
+        try {
+            for(op in operations) {
+                theOp = op
+                var r = provider.applyBatch(arrayListOf(op));
+                Log.d("AMOGUS", r.toString())
+            }
+        }catch(ex: Exception) {
+            Log.d("AMOGUS", "err", ex)
+        }
+        Log.d("AMOGUS", operations.toString());
+        Log.d("AMOGUS", "Upsert favs");
+        Log.d("AMOGUS", "yay2");
 		return provider.applyBatch(operations)
 	}
 
 	private fun upsertManga(manga: MangaSyncDto, authority: String): List<ContentProviderOperation> {
 		val tags = manga.tags
-		val result = ArrayList<ContentProviderOperation>(tags.size * 2 + 1)
+        val result = ArrayList<ContentProviderOperation>(tags.size * 2 + 1)
+        val tagsResult = ArrayList<ContentProviderOperation>(tags.size)
+        val mangaTagsResult = ArrayList<ContentProviderOperation>(tags.size)
 		for (tag in tags) {
-			result += ContentProviderOperation.newInsert(uri(authority, TABLE_TAGS))
+			tagsResult += ContentProviderOperation.newInsert(uri(authority, TABLE_TAGS))
 				.withValues(tag.toContentValues())
 				.build()
-			result += ContentProviderOperation.newInsert(uri(authority, TABLE_MANGA_TAGS))
+			mangaTagsResult += ContentProviderOperation.newInsert(uri(authority, TABLE_MANGA_TAGS))
 				.withValues(
 					buildContentValues(2) {
 						put("manga_id", manga.id)
@@ -185,12 +217,14 @@ class SyncHelper @AssistedInject constructor(
 					},
 				).build()
 		}
+        result.addAll(tagsResult)
 		result.add(
-			0,
+
 			ContentProviderOperation.newInsert(uri(authority, TABLE_MANGA))
 				.withValues(manga.toContentValues())
 				.build(),
 		)
+        result.addAll(mangaTagsResult)
 		return result
 	}
 
